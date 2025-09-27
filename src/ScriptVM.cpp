@@ -1,4 +1,5 @@
 #include "ScriptVM.hpp"
+#include "ScriptBreakpoint.hpp"
 #include "rage/Joaat.hpp"
 #include "rage/scrThread.hpp"
 #include "rage/scrProgram.hpp"
@@ -117,6 +118,23 @@ rage::ThreadState RunScriptThread(rage::scrValue* stack, rage::scrValue** global
     JUMP(context->m_ProgramCounter);
 
 NEXT:
+
+    const auto script = static_cast<std::uint32_t>(context->m_ScriptHash);
+    const auto pc = static_cast<std::uint32_t>(opcode - basePtr);
+    if (ScriptBreakpoint::Has(script, pc))
+    {
+        ScriptBreakpoint::IncrementHitCount(script, pc);
+        if (!ScriptBreakpoint::ShouldSkip(script, pc))
+        {
+            if (ScriptBreakpoint::ShouldPause(script, pc))
+            {
+                context->m_ProgramCounter = pc;
+                ScriptBreakpoint::Skip(script, pc);
+                return context->m_State = rage::ThreadState::PAUSED;
+            }
+        }
+    }
+
     switch (GET_BYTE)
     {
     case rage::Opcodes::NOP:
