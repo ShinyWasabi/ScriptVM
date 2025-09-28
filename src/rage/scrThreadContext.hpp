@@ -2,7 +2,7 @@
 
 namespace rage
 {
-	enum ThreadState : std::uint32_t
+	enum scrThreadState : std::uint32_t
 	{
 		RUNNING,
 		IDLE,
@@ -10,7 +10,7 @@ namespace rage
 		PAUSED
 	};
 
-	enum ThreadPriority : std::uint32_t
+	enum scrThreadPriority : std::uint32_t
 	{
 		HIGHEST,
 		NORMAL,
@@ -23,7 +23,7 @@ namespace rage
 	public:
 		std::uint32_t m_ThreadId;
 		std::uint64_t m_ScriptHash;
-		ThreadState m_State;
+		scrThreadState m_State;
 		std::uint32_t m_ProgramCounter;
 		std::uint32_t m_FramePointer;
 		std::uint32_t m_StackPointer;
@@ -35,7 +35,7 @@ namespace rage
 		std::uint32_t m_CatchProgramCounter;
 		std::uint32_t m_CatchFramePointer;
 		std::uint32_t m_CatchStackPointer;
-		ThreadPriority m_Priority;
+		scrThreadPriority m_Priority;
 		std::uint8_t m_CallDepth;
 		std::uint32_t m_CallStack[16];
 	};

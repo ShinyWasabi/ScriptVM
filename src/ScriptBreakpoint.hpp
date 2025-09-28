@@ -1,78 +1,35 @@
 #pragma once
 
+namespace rage
+{
+	class scrThreadContext;
+};
+
 class ScriptBreakpoint
 {
 public:
-	static void Add(std::uint32_t script, std::uint32_t pc, bool pause)
-	{
-		GetInstance().AddImpl(script, pc, pause);
-	}
+	static bool OnBreakpoint(std::uint32_t script, std::uint32_t pc, rage::scrThreadContext* context);
 
-	static void Remove(std::uint32_t script, std::uint32_t pc)
-	{
-		GetInstance().RemoveImpl(script, pc);
-	}
-
-	static void Resume(std::uint32_t script, std::uint32_t pc)
-	{
-		GetInstance().ResumeImpl(script, pc);
-	}
-
-	static void IncrementHitCount(std::uint32_t script, std::uint32_t pc)
-	{
-		GetInstance().IncrementHitCountImpl(script, pc);
-	}
-
-	static void Skip(std::uint32_t script, std::uint32_t pc)
-	{
-		GetInstance().SkipImpl(script, pc);
-	}
-
-	static std::uint32_t GetHitCount(std::uint32_t script, std::uint32_t pc)
-	{
-		return GetInstance().GetHitCountImpl(script, pc);
-	}
-
-	static bool Has(std::uint32_t script, std::uint32_t pc)
-	{
-		return GetInstance().HasImpl(script, pc);
-	}
-
-	static bool ShouldSkip(std::uint32_t script, std::uint32_t pc)
-	{
-		return GetInstance().ShouldSkipImpl(script, pc);
-	}
-
-	static bool ShouldPause(std::uint32_t script, std::uint32_t pc)
-	{
-		return GetInstance().ShouldPauseImpl(script, pc);
-	}
+	static bool Add(std::uint32_t script, std::uint32_t pc, bool pause);
+	static bool Remove(std::uint32_t script, std::uint32_t pc);
+	static bool Resume(std::uint32_t script, std::uint32_t pc);
+	static bool Exists(std::uint32_t script, std::uint32_t pc);
+	static int GetHitCount(std::uint32_t script, std::uint32_t pc);
 
 private:
-	struct BreakPoint
+	struct Breakpoint
 	{
 		std::uint32_t Script;
 		std::uint32_t Pc;
 		std::uint32_t HitCount;
-		bool Skip;
+		bool Active;
 		bool Pause;
 	};
 
-	static ScriptBreakpoint& GetInstance()
-	{
-		static ScriptBreakpoint instance;
-		return instance;
-	}
+	static void Activate(std::uint32_t script, std::uint32_t pc);
+	static void Increment(std::uint32_t script, std::uint32_t pc);
+	static bool IsActive(std::uint32_t script, std::uint32_t pc);
+	static bool ShouldPause(std::uint32_t script, std::uint32_t pc);
 
-	void AddImpl(std::uint32_t script, std::uint32_t pc, bool pause);
-	void RemoveImpl(std::uint32_t script, std::uint32_t pc);
-	void ResumeImpl(std::uint32_t script, std::uint32_t pc);
-	void IncrementHitCountImpl(std::uint32_t script, std::uint32_t pc);
-	void SkipImpl(std::uint32_t script, std::uint32_t pc);
-	std::uint32_t GetHitCountImpl(std::uint32_t script, std::uint32_t pc);
-	bool HasImpl(std::uint32_t script, std::uint32_t pc);
-	bool ShouldSkipImpl(std::uint32_t script, std::uint32_t pc);
-	bool ShouldPauseImpl(std::uint32_t script, std::uint32_t pc);
-
-	static inline std::vector<BreakPoint> m_Breakpoints;
+	static inline std::vector<Breakpoint> m_Breakpoints;
 };

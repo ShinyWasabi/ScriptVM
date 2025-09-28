@@ -8,7 +8,7 @@ namespace rage
 	{
 	public:
 		char m_Pad1[0x7A0];
-		rage::scrThread* m_CurrentScriptThread;
+		scrThread* m_CurrentScriptThread;
 		bool m_ScriptThreadActive;
 
 		static tlsContext* Get()

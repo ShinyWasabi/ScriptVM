@@ -2,7 +2,7 @@
 
 namespace rage
 {
-	enum Opcodes : std::uint8_t
+	enum scrOpcode : std::uint8_t
 	{
 		NOP,
 		IADD,

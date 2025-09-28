@@ -23,7 +23,7 @@
                                                                                               \
         MessageBoxA(nullptr, str, "ScriptVM", MB_OK | MB_ICONERROR);                          \
                                                                                               \
-        return context->m_State = rage::ThreadState::KILLED;                                  \
+        return context->m_State = rage::scrThreadState::KILLED;                               \
     } while (0)
 
 #define JUMP(_offset)                                              \
@@ -105,7 +105,7 @@ void Itoa(char* dest, std::int32_t value)
     }
 }
 
-rage::ThreadState RunScriptThread(rage::scrValue* stack, rage::scrValue** globals, rage::scrProgram* program, rage::scrThreadContext* context)
+rage::scrThreadState RunScriptThread(rage::scrValue* stack, rage::scrValue** globals, rage::scrProgram* program, rage::scrThreadContext* context)
 {
     char buffer[16];
     std::uint8_t* opcode;
@@ -121,131 +121,120 @@ NEXT:
 
     const auto script = static_cast<std::uint32_t>(context->m_ScriptHash);
     const auto pc = static_cast<std::uint32_t>(opcode - basePtr);
-    if (ScriptBreakpoint::Has(script, pc))
-    {
-        ScriptBreakpoint::IncrementHitCount(script, pc);
-        if (!ScriptBreakpoint::ShouldSkip(script, pc))
-        {
-            if (ScriptBreakpoint::ShouldPause(script, pc))
-            {
-                context->m_ProgramCounter = pc;
-                ScriptBreakpoint::Skip(script, pc);
-                return context->m_State = rage::ThreadState::PAUSED;
-            }
-        }
-    }
+    if (ScriptBreakpoint::OnBreakpoint(script, pc, context))
+        return context->m_State = rage::scrThreadState::PAUSED;
 
     switch (GET_BYTE)
     {
-    case rage::Opcodes::NOP:
+    case rage::scrOpcode::NOP:
     {
         JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::IADD:
+    case rage::scrOpcode::IADD:
     {
         --stackPtr;
         stackPtr[0].Int += stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::ISUB:
+    case rage::scrOpcode::ISUB:
     {
         --stackPtr;
         stackPtr[0].Int -= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::IMUL:
+    case rage::scrOpcode::IMUL:
     {
         --stackPtr;
         stackPtr[0].Int *= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::IDIV:
+    case rage::scrOpcode::IDIV:
     {
         --stackPtr;
         if (stackPtr[1].Int)
             stackPtr[0].Int /= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::IMOD:
+    case rage::scrOpcode::IMOD:
     {
         --stackPtr;
         if (stackPtr[1].Int)
             stackPtr[0].Int %= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::INOT:
+    case rage::scrOpcode::INOT:
     {
         stackPtr[0].Int = !stackPtr[0].Int;
         goto NEXT;
     }
-    case rage::Opcodes::INEG:
+    case rage::scrOpcode::INEG:
     {
         stackPtr[0].Int = -stackPtr[0].Int;
         goto NEXT;
     }
-    case rage::Opcodes::IEQ:
+    case rage::scrOpcode::IEQ:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Int == stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::INE:
+    case rage::scrOpcode::INE:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Int != stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::IGT:
+    case rage::scrOpcode::IGT:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Int > stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::IGE:
+    case rage::scrOpcode::IGE:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Int >= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::ILT:
+    case rage::scrOpcode::ILT:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Int < stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::ILE:
+    case rage::scrOpcode::ILE:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Int <= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::FADD:
+    case rage::scrOpcode::FADD:
     {
         --stackPtr;
         stackPtr[0].Float += stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FSUB:
+    case rage::scrOpcode::FSUB:
     {
         --stackPtr;
         stackPtr[0].Float -= stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FMUL:
+    case rage::scrOpcode::FMUL:
     {
         --stackPtr;
         stackPtr[0].Float *= stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FDIV:
+    case rage::scrOpcode::FDIV:
     {
         --stackPtr;
         if (stackPtr[1].Int)
             stackPtr[0].Float /= stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FMOD:
+    case rage::scrOpcode::FMOD:
     {
         --stackPtr;
         if (stackPtr[1].Int)
@@ -256,48 +245,48 @@ NEXT:
         }
         goto NEXT;
     }
-    case rage::Opcodes::FNEG:
+    case rage::scrOpcode::FNEG:
     {
         stackPtr[0].Uns ^= 0x80000000;
         goto NEXT;
     }
-    case rage::Opcodes::FEQ:
+    case rage::scrOpcode::FEQ:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Float == stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FNE:
+    case rage::scrOpcode::FNE:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Float != stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FGT:
+    case rage::scrOpcode::FGT:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Float > stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FGE:
+    case rage::scrOpcode::FGE:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Float >= stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FLT:
+    case rage::scrOpcode::FLT:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Float < stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::FLE:
+    case rage::scrOpcode::FLE:
     {
         --stackPtr;
         stackPtr[0].Int = stackPtr[0].Float <= stackPtr[1].Float;
         goto NEXT;
     }
-    case rage::Opcodes::VADD:
+    case rage::scrOpcode::VADD:
     {
         stackPtr -= 3;
         stackPtr[-2].Float += stackPtr[1].Float;
@@ -305,7 +294,7 @@ NEXT:
         stackPtr[0].Float += stackPtr[3].Float;
         goto NEXT;
     }
-    case rage::Opcodes::VSUB:
+    case rage::scrOpcode::VSUB:
     {
         stackPtr -= 3;
         stackPtr[-2].Float -= stackPtr[1].Float;
@@ -313,7 +302,7 @@ NEXT:
         stackPtr[0].Float -= stackPtr[3].Float;
         goto NEXT;
     }
-    case rage::Opcodes::VMUL:
+    case rage::scrOpcode::VMUL:
     {
         stackPtr -= 3;
         stackPtr[-2].Float *= stackPtr[1].Float;
@@ -321,7 +310,7 @@ NEXT:
         stackPtr[0].Float *= stackPtr[3].Float;
         goto NEXT;
     }
-    case rage::Opcodes::VDIV:
+    case rage::scrOpcode::VDIV:
     {
         stackPtr -= 3;
         if (stackPtr[1].Int)
@@ -332,61 +321,61 @@ NEXT:
             stackPtr[0].Float /= stackPtr[3].Float;
         goto NEXT;
     }
-    case rage::Opcodes::VNEG:
+    case rage::scrOpcode::VNEG:
     {
         stackPtr[-2].Uns ^= 0x80000000;
         stackPtr[-1].Uns ^= 0x80000000;
         stackPtr[0].Uns ^= 0x80000000;
         goto NEXT;
     }
-    case rage::Opcodes::IAND:
+    case rage::scrOpcode::IAND:
     {
         --stackPtr;
         stackPtr[0].Int &= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::IOR:
+    case rage::scrOpcode::IOR:
     {
         --stackPtr;
         stackPtr[0].Int |= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::IXOR:
+    case rage::scrOpcode::IXOR:
     {
         --stackPtr;
         stackPtr[0].Int ^= stackPtr[1].Int;
         goto NEXT;
     }
-    case rage::Opcodes::I2F:
+    case rage::scrOpcode::I2F:
     {
         stackPtr[0].Float = static_cast<float>(stackPtr[0].Int);
         goto NEXT;
     }
-    case rage::Opcodes::F2I:
+    case rage::scrOpcode::F2I:
     {
         stackPtr[0].Int = static_cast<std::int32_t>(stackPtr[0].Float);
         goto NEXT;
     }
-    case rage::Opcodes::F2V:
+    case rage::scrOpcode::F2V:
     {
         stackPtr += 2;
         stackPtr[-1].Int = stackPtr[0].Int = stackPtr[-2].Int;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_U8:
+    case rage::scrOpcode::PUSH_CONST_U8:
     {
         ++stackPtr;
         stackPtr[0].Int = GET_BYTE;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_U8_U8:
+    case rage::scrOpcode::PUSH_CONST_U8_U8:
     {
         stackPtr += 2;
         stackPtr[-1].Int = GET_BYTE;
         stackPtr[0].Int = GET_BYTE;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_U8_U8_U8:
+    case rage::scrOpcode::PUSH_CONST_U8_U8_U8:
     {
         stackPtr += 3;
         stackPtr[-2].Int = GET_BYTE;
@@ -394,25 +383,25 @@ NEXT:
         stackPtr[0].Int = GET_BYTE;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_U32:
-    case rage::Opcodes::PUSH_CONST_F:
+    case rage::scrOpcode::PUSH_CONST_U32:
+    case rage::scrOpcode::PUSH_CONST_F:
     {
         ++stackPtr;
         stackPtr[0].Uns = GET_DWORD;
         goto NEXT;
     }
-    case rage::Opcodes::DUP:
+    case rage::scrOpcode::DUP:
     {
         ++stackPtr;
         stackPtr[0].Any = stackPtr[-1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::DROP:
+    case rage::scrOpcode::DROP:
     {
         --stackPtr;
         goto NEXT;
     }
-    case rage::Opcodes::NATIVE:
+    case rage::scrOpcode::NATIVE:
     {
         std::uint8_t native = GET_BYTE;
         std::int32_t argCount = (native >> 2) & 0x3F;
@@ -427,8 +416,8 @@ NEXT:
         rage::scrNativeCallContext ctx(retCount ? &stack[context->m_StackPointer - argCount] : 0, argCount, &stack[context->m_StackPointer - argCount]);
         (*handler)(&ctx);
 
-        // In case TERMINATE_THIS_THREAD or TERMINATE_THREAD is called
-        if (context->m_State != rage::ThreadState::RUNNING)
+        // In case WAIT, TERMINATE_THIS_THREAD, or TERMINATE_THREAD is called
+        if (context->m_State != rage::scrThreadState::RUNNING)
             return context->m_State;
 
         ctx.FixVectors();
@@ -436,7 +425,7 @@ NEXT:
         stackPtr -= argCount - retCount;
         goto NEXT;
     }
-    case rage::Opcodes::ENTER:
+    case rage::scrOpcode::ENTER:
     {
         std::uint32_t argCount = GET_BYTE;
         std::uint32_t localCount = GET_WORD;
@@ -460,7 +449,7 @@ NEXT:
         stackPtr -= argCount;
         goto NEXT;
     }
-    case rage::Opcodes::LEAVE:
+    case rage::scrOpcode::LEAVE:
     {
         --context->m_CallDepth;
 
@@ -480,28 +469,28 @@ NEXT:
 
         // Script reached end of code
         if (!caller)
-            return context->m_State = rage::ThreadState::KILLED;
+            return context->m_State = rage::scrThreadState::KILLED;
 
         goto NEXT;
     }
-    case rage::Opcodes::LOAD:
+    case rage::scrOpcode::LOAD:
     {
         stackPtr[0].Any = stackPtr[0].Reference->Any;
         goto NEXT;
     }
-    case rage::Opcodes::STORE:
+    case rage::scrOpcode::STORE:
     {
         stackPtr -= 2;
         stackPtr[2].Reference->Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::STORE_REV:
+    case rage::scrOpcode::STORE_REV:
     {
         --stackPtr;
         stackPtr[0].Reference->Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::LOAD_N:
+    case rage::scrOpcode::LOAD_N:
     {
         rage::scrValue* data = (stackPtr--)->Reference;
         std::uint32_t itemCount = (stackPtr--)->Int;
@@ -509,7 +498,7 @@ NEXT:
             (++stackPtr)->Any = data[i].Any;
         goto NEXT;
     }
-    case rage::Opcodes::STORE_N:
+    case rage::scrOpcode::STORE_N:
     {
         rage::scrValue* data = (stackPtr--)->Reference;
         std::uint32_t itemCount = (stackPtr--)->Int;
@@ -517,7 +506,7 @@ NEXT:
             data[itemCount - 1 - i].Any = (stackPtr--)->Any;
         goto NEXT;
     }
-    case rage::Opcodes::ARRAY_U8:
+    case rage::scrOpcode::ARRAY_U8:
     {
         --stackPtr;
         rage::scrValue* ref = stackPtr[1].Reference;
@@ -528,7 +517,7 @@ NEXT:
         stackPtr[0].Reference = ref;
         goto NEXT;
     }
-    case rage::Opcodes::ARRAY_U8_LOAD:
+    case rage::scrOpcode::ARRAY_U8_LOAD:
     {
         --stackPtr;
         rage::scrValue* ref = stackPtr[1].Reference;
@@ -539,7 +528,7 @@ NEXT:
         stackPtr[0].Any = ref->Any;
         goto NEXT;
     }
-    case rage::Opcodes::ARRAY_U8_STORE:
+    case rage::scrOpcode::ARRAY_U8_STORE:
     {
         stackPtr -= 3;
         rage::scrValue* ref = stackPtr[3].Reference;
@@ -550,107 +539,107 @@ NEXT:
         ref->Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::LOCAL_U8:
+    case rage::scrOpcode::LOCAL_U8:
     {
         ++stackPtr;
         stackPtr[0].Reference = framePtr + GET_BYTE;
         goto NEXT;
     }
-    case rage::Opcodes::LOCAL_U8_LOAD:
+    case rage::scrOpcode::LOCAL_U8_LOAD:
     {
         ++stackPtr;
         stackPtr[0].Any = framePtr[GET_BYTE].Any;
         goto NEXT;
     }
-    case rage::Opcodes::LOCAL_U8_STORE:
+    case rage::scrOpcode::LOCAL_U8_STORE:
     {
         --stackPtr;
         framePtr[GET_BYTE].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U8:
+    case rage::scrOpcode::STATIC_U8:
     {
         ++stackPtr;
         stackPtr[0].Reference = stack + GET_BYTE;
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U8_LOAD:
+    case rage::scrOpcode::STATIC_U8_LOAD:
     {
         ++stackPtr;
         stackPtr[0].Any = stack[GET_BYTE].Any;
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U8_STORE:
+    case rage::scrOpcode::STATIC_U8_STORE:
     {
         --stackPtr;
         stack[GET_BYTE].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::IADD_U8:
+    case rage::scrOpcode::IADD_U8:
     {
         stackPtr[0].Int += GET_BYTE;
         goto NEXT;
     }
-    case rage::Opcodes::IMUL_U8:
+    case rage::scrOpcode::IMUL_U8:
     {
         stackPtr[0].Int *= GET_BYTE;
         goto NEXT;
     }
-    case rage::Opcodes::IOFFSET:
+    case rage::scrOpcode::IOFFSET:
     {
         --stackPtr;
         stackPtr[0].Any += stackPtr[1].Int * sizeof(rage::scrValue);
         goto NEXT;
     }
-    case rage::Opcodes::IOFFSET_U8:
+    case rage::scrOpcode::IOFFSET_U8:
     {
         stackPtr[0].Any += GET_BYTE * sizeof(rage::scrValue);
         goto NEXT;
     }
-    case rage::Opcodes::IOFFSET_U8_LOAD:
+    case rage::scrOpcode::IOFFSET_U8_LOAD:
     {
         stackPtr[0].Any = stackPtr[0].Reference[GET_BYTE].Any;
         goto NEXT;
     }
-    case rage::Opcodes::IOFFSET_U8_STORE:
+    case rage::scrOpcode::IOFFSET_U8_STORE:
     {
         stackPtr -= 2;
         stackPtr[2].Reference[GET_BYTE].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_S16:
+    case rage::scrOpcode::PUSH_CONST_S16:
     {
         ++stackPtr;
         stackPtr[0].Int = GET_SWORD;
         goto NEXT;
     }
-    case rage::Opcodes::IADD_S16:
+    case rage::scrOpcode::IADD_S16:
     {
         stackPtr[0].Int += GET_SWORD;
         goto NEXT;
     }
-    case rage::Opcodes::IMUL_S16:
+    case rage::scrOpcode::IMUL_S16:
     {
         stackPtr[0].Int *= GET_SWORD;
         goto NEXT;
     }
-    case rage::Opcodes::IOFFSET_S16:
+    case rage::scrOpcode::IOFFSET_S16:
     {
         stackPtr[0].Any += GET_SWORD * sizeof(rage::scrValue);
         goto NEXT;
     }
-    case rage::Opcodes::IOFFSET_S16_LOAD:
+    case rage::scrOpcode::IOFFSET_S16_LOAD:
     {
         stackPtr[0].Any = stackPtr[0].Reference[GET_SWORD].Any;
         goto NEXT;
     }
-    case rage::Opcodes::IOFFSET_S16_STORE:
+    case rage::scrOpcode::IOFFSET_S16_STORE:
     {
         stackPtr -= 2;
         stackPtr[2].Reference[GET_SWORD].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::ARRAY_U16:
+    case rage::scrOpcode::ARRAY_U16:
     {
         --stackPtr;
         rage::scrValue* ref = stackPtr[1].Reference;
@@ -661,7 +650,7 @@ NEXT:
         stackPtr[0].Reference = ref;
         goto NEXT;
     }
-    case rage::Opcodes::ARRAY_U16_LOAD:
+    case rage::scrOpcode::ARRAY_U16_LOAD:
     {
         --stackPtr;
         rage::scrValue* ref = stackPtr[1].Reference;
@@ -672,7 +661,7 @@ NEXT:
         stackPtr[0].Any = ref->Any;
         goto NEXT;
     }
-    case rage::Opcodes::ARRAY_U16_STORE:
+    case rage::scrOpcode::ARRAY_U16_STORE:
     {
         stackPtr -= 3;
         rage::scrValue* ref = stackPtr[3].Reference;
@@ -683,67 +672,67 @@ NEXT:
         ref->Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::LOCAL_U16:
+    case rage::scrOpcode::LOCAL_U16:
     {
         ++stackPtr;
         stackPtr[0].Reference = framePtr + GET_WORD;
         goto NEXT;
     }
-    case rage::Opcodes::LOCAL_U16_LOAD:
+    case rage::scrOpcode::LOCAL_U16_LOAD:
     {
         ++stackPtr;
         stackPtr[0].Any = framePtr[GET_WORD].Any;
         goto NEXT;
     }
-    case rage::Opcodes::LOCAL_U16_STORE:
+    case rage::scrOpcode::LOCAL_U16_STORE:
     {
         --stackPtr;
         framePtr[GET_WORD].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U16:
+    case rage::scrOpcode::STATIC_U16:
     {
         ++stackPtr;
         stackPtr[0].Reference = stack + GET_WORD;
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U16_LOAD:
+    case rage::scrOpcode::STATIC_U16_LOAD:
     {
         ++stackPtr;
         stackPtr[0].Any = stack[GET_WORD].Any;
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U16_STORE:
+    case rage::scrOpcode::STATIC_U16_STORE:
     {
         --stackPtr;
         stack[GET_WORD].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::GLOBAL_U16:
+    case rage::scrOpcode::GLOBAL_U16:
     {
         ++stackPtr;
         stackPtr[0].Reference = globals[0] + GET_WORD;
         goto NEXT;
     }
-    case rage::Opcodes::GLOBAL_U16_LOAD:
+    case rage::scrOpcode::GLOBAL_U16_LOAD:
     {
         ++stackPtr;
         stackPtr[0].Any = globals[0][GET_WORD].Any;
         goto NEXT;
     }
-    case rage::Opcodes::GLOBAL_U16_STORE:
+    case rage::scrOpcode::GLOBAL_U16_STORE:
     {
         --stackPtr;
         globals[0][GET_WORD].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::J:
+    case rage::scrOpcode::J:
     {
         std::int32_t ofs = GET_SWORD;
         JUMP(opcode - basePtr + ofs);
         goto NEXT;
     }
-    case rage::Opcodes::JZ:
+    case rage::scrOpcode::JZ:
     {
         std::int32_t ofs = GET_SWORD;
         --stackPtr;
@@ -753,7 +742,7 @@ NEXT:
             JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::IEQ_JZ:
+    case rage::scrOpcode::IEQ_JZ:
     {
         std::int32_t ofs = GET_SWORD;
         stackPtr -= 2;
@@ -763,7 +752,7 @@ NEXT:
             JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::INE_JZ:
+    case rage::scrOpcode::INE_JZ:
     {
         std::int32_t ofs = GET_SWORD;
         stackPtr -= 2;
@@ -773,7 +762,7 @@ NEXT:
             JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::IGT_JZ:
+    case rage::scrOpcode::IGT_JZ:
     {
         std::int32_t ofs = GET_SWORD;
         stackPtr -= 2;
@@ -783,7 +772,7 @@ NEXT:
             JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::IGE_JZ:
+    case rage::scrOpcode::IGE_JZ:
     {
         std::int32_t ofs = GET_SWORD;
         stackPtr -= 2;
@@ -793,7 +782,7 @@ NEXT:
             JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::ILT_JZ:
+    case rage::scrOpcode::ILT_JZ:
     {
         std::int32_t ofs = GET_SWORD;
         stackPtr -= 2;
@@ -803,7 +792,7 @@ NEXT:
             JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::ILE_JZ:
+    case rage::scrOpcode::ILE_JZ:
     {
         std::int32_t ofs = GET_SWORD;
         stackPtr -= 2;
@@ -813,7 +802,7 @@ NEXT:
             JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::CALL:
+    case rage::scrOpcode::CALL:
     {
         std::uint32_t ofs = GET_24BIT;
         ++stackPtr;
@@ -821,25 +810,25 @@ NEXT:
         JUMP(ofs);
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U24:
+    case rage::scrOpcode::STATIC_U24:
     {
         ++stackPtr;
         stackPtr[0].Reference = stack + GET_24BIT;
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U24_LOAD:
+    case rage::scrOpcode::STATIC_U24_LOAD:
     {
         ++stackPtr;
         stackPtr[0].Any = stack[GET_24BIT].Any;
         goto NEXT;
     }
-    case rage::Opcodes::STATIC_U24_STORE:
+    case rage::scrOpcode::STATIC_U24_STORE:
     {
         --stackPtr;
         stack[GET_24BIT].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::GLOBAL_U24:
+    case rage::scrOpcode::GLOBAL_U24:
     {
         std::uint32_t global = GET_24BIT;
         std::uint32_t block = global >> 0x12U;
@@ -851,7 +840,7 @@ NEXT:
             stackPtr[0].Reference = &globals[block][index];
         goto NEXT;
     }
-    case rage::Opcodes::GLOBAL_U24_LOAD:
+    case rage::scrOpcode::GLOBAL_U24_LOAD:
     {
         std::uint32_t global = GET_24BIT;
         std::uint32_t block = global >> 0x12U;
@@ -863,7 +852,7 @@ NEXT:
             stackPtr[0].Any = globals[block][index].Any;
         goto NEXT;
     }
-    case rage::Opcodes::GLOBAL_U24_STORE:
+    case rage::scrOpcode::GLOBAL_U24_STORE:
     {
         std::uint32_t global = GET_24BIT;
         std::uint32_t block = global >> 0x12U;
@@ -875,13 +864,13 @@ NEXT:
             globals[block][index].Any = stackPtr[1].Any;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_U24:
+    case rage::scrOpcode::PUSH_CONST_U24:
     {
         ++stackPtr;
         stackPtr[0].Int = GET_24BIT;
         goto NEXT;
     }
-    case rage::Opcodes::SWITCH:
+    case rage::scrOpcode::SWITCH:
     {
         --stackPtr;
         std::uint32_t switchVal = stackPtr[1].Uns;
@@ -900,18 +889,18 @@ NEXT:
         JUMP(opcode - basePtr);
         goto NEXT;
     }
-    case rage::Opcodes::STRING:
+    case rage::scrOpcode::STRING:
     {
         std::uint32_t ofs = stackPtr[0].Uns;
         stackPtr[0].String = program->m_Strings[ofs >> 14U] + (ofs & 0x3FFFU);
         goto NEXT;
     }
-    case rage::Opcodes::STRINGHASH:
+    case rage::scrOpcode::STRINGHASH:
     {
         stackPtr[0].Uns = rage::Joaat(stackPtr[0].String);
         goto NEXT;
     }
-    case rage::Opcodes::TEXT_LABEL_ASSIGN_STRING:
+    case rage::scrOpcode::TEXT_LABEL_ASSIGN_STRING:
     {
         stackPtr -= 2;
         char* dest = const_cast<char*>(stackPtr[2].String);
@@ -919,7 +908,7 @@ NEXT:
         AssignString(dest, GET_BYTE, src);
         goto NEXT;
     }
-    case rage::Opcodes::TEXT_LABEL_ASSIGN_INT:
+    case rage::scrOpcode::TEXT_LABEL_ASSIGN_INT:
     {
         stackPtr -= 2;
         char* dest = const_cast<char*>(stackPtr[2].String);
@@ -928,7 +917,7 @@ NEXT:
         AssignString(dest, GET_BYTE, buffer);
         goto NEXT;
     }
-    case rage::Opcodes::TEXT_LABEL_APPEND_STRING:
+    case rage::scrOpcode::TEXT_LABEL_APPEND_STRING:
     {
         stackPtr -= 2;
         char* dest = const_cast<char*>(stackPtr[2].String);
@@ -936,7 +925,7 @@ NEXT:
         AppendString(dest, GET_BYTE, src);
         goto NEXT;
     }
-    case rage::Opcodes::TEXT_LABEL_APPEND_INT:
+    case rage::scrOpcode::TEXT_LABEL_APPEND_INT:
     {
         stackPtr -= 2;
         char* dest = const_cast<char*>(stackPtr[2].String);
@@ -945,7 +934,7 @@ NEXT:
         AppendString(dest, GET_BYTE, buffer);
         goto NEXT;
     }
-    case rage::Opcodes::TEXT_LABEL_COPY:
+    case rage::scrOpcode::TEXT_LABEL_COPY:
     {
         stackPtr -= 3;
         rage::scrValue* dest = stackPtr[3].Reference;
@@ -963,7 +952,7 @@ NEXT:
         reinterpret_cast<char*>(dest)[srcSize * sizeof(rage::scrValue) - 1] = '\0';
         goto NEXT;
     }
-    case rage::Opcodes::CATCH:
+    case rage::scrOpcode::CATCH:
     {
         context->m_CatchProgramCounter = static_cast<std::int32_t>(opcode - basePtr);
         context->m_CatchFramePointer = static_cast<std::int32_t>(framePtr - stack);
@@ -972,7 +961,7 @@ NEXT:
         stackPtr[0].Int = -1;
         goto NEXT;
     }
-    case rage::Opcodes::THROW:
+    case rage::scrOpcode::THROW:
     {
         std::int32_t ofs = stackPtr[0].Int;
         if (!context->m_CatchProgramCounter)
@@ -986,7 +975,7 @@ NEXT:
         }
         goto NEXT;
     }
-    case rage::Opcodes::CALLINDIRECT:
+    case rage::scrOpcode::CALLINDIRECT:
     {
         std::uint32_t ofs = stackPtr[0].Uns;
         if (!ofs)
@@ -995,115 +984,115 @@ NEXT:
         JUMP(ofs);
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_M1:
+    case rage::scrOpcode::PUSH_CONST_M1:
     {
         ++stackPtr;
         stackPtr[0].Int = -1;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_0:
+    case rage::scrOpcode::PUSH_CONST_0:
     {
         ++stackPtr;
         stackPtr[0].Any = 0;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_1:
+    case rage::scrOpcode::PUSH_CONST_1:
     {
         ++stackPtr;
         stackPtr[0].Int = 1;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_2:
+    case rage::scrOpcode::PUSH_CONST_2:
     {
         ++stackPtr;
         stackPtr[0].Int = 2;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_3:
+    case rage::scrOpcode::PUSH_CONST_3:
     {
         ++stackPtr;
         stackPtr[0].Int = 3;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_4:
+    case rage::scrOpcode::PUSH_CONST_4:
     {
         ++stackPtr;
         stackPtr[0].Int = 4;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_5:
+    case rage::scrOpcode::PUSH_CONST_5:
     {
         ++stackPtr;
         stackPtr[0].Int = 5;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_6:
+    case rage::scrOpcode::PUSH_CONST_6:
     {
         ++stackPtr;
         stackPtr[0].Int = 6;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_7:
+    case rage::scrOpcode::PUSH_CONST_7:
     {
         ++stackPtr;
         stackPtr[0].Int = 7;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_FM1:
+    case rage::scrOpcode::PUSH_CONST_FM1:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0xBF800000;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_F0:
+    case rage::scrOpcode::PUSH_CONST_F0:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0x00000000;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_F1:
+    case rage::scrOpcode::PUSH_CONST_F1:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0x3F800000;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_F2:
+    case rage::scrOpcode::PUSH_CONST_F2:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0x40000000;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_F3:
+    case rage::scrOpcode::PUSH_CONST_F3:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0x40400000;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_F4:
+    case rage::scrOpcode::PUSH_CONST_F4:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0x40800000;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_F5:
+    case rage::scrOpcode::PUSH_CONST_F5:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0x40A00000;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_F6:
+    case rage::scrOpcode::PUSH_CONST_F6:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0x40C00000;
         goto NEXT;
     }
-    case rage::Opcodes::PUSH_CONST_F7:
+    case rage::scrOpcode::PUSH_CONST_F7:
     {
         ++stackPtr;
         stackPtr[0].Uns = 0x40E00000;
         goto NEXT;
     }
-    case rage::Opcodes::IS_BIT_SET:
+    case rage::scrOpcode::IS_BIT_SET:
     {
         --stackPtr;
         stackPtr[0].Int = (stackPtr[0].Int & (1 << stackPtr[1].Int)) != 0;
@@ -1116,5 +1105,5 @@ NEXT:
     }
 
     // It should never reach here
-    return rage::ThreadState::KILLED;
+    return rage::scrThreadState::KILLED;
 }
