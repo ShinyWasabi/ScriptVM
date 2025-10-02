@@ -8,12 +8,17 @@ namespace rage
 class ScriptBreakpoint
 {
 public:
-	static bool OnBreakpoint(std::uint32_t script, std::uint32_t pc, rage::scrThreadContext* context);
+	static void OnBreakpoint(std::uint32_t script, std::uint32_t pc, rage::scrThreadContext* context);
 
-	static bool Add(std::uint32_t script, std::uint32_t pc, bool pause);
+	static bool Add(std::uint32_t script, std::uint32_t pc);
 	static bool Remove(std::uint32_t script, std::uint32_t pc);
+	static bool RemoveAll();
+	static bool RemoveAllScript(std::uint32_t script);
 	static bool Resume(std::uint32_t script, std::uint32_t pc);
 	static bool Exists(std::uint32_t script, std::uint32_t pc);
+	static bool IsActive(std::uint32_t script, std::uint32_t pc);
+	static int GetCount();
+	static int GetCountScript(std::uint32_t script);
 	static int GetHitCount(std::uint32_t script, std::uint32_t pc);
 
 private:
@@ -23,13 +28,8 @@ private:
 		std::uint32_t Pc;
 		std::uint32_t HitCount;
 		bool Active;
-		bool Pause;
+		bool Skip;
 	};
-
-	static void Activate(std::uint32_t script, std::uint32_t pc);
-	static void Increment(std::uint32_t script, std::uint32_t pc);
-	static bool IsActive(std::uint32_t script, std::uint32_t pc);
-	static bool ShouldPause(std::uint32_t script, std::uint32_t pc);
 
 	static inline std::vector<Breakpoint> m_Breakpoints;
 };

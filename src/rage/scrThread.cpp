@@ -1,8 +1,14 @@
 #include "scrThread.hpp"
+#include "tlsContext.hpp"
 #include "Memory.hpp"
 
 namespace rage
 {
+	scrThread* scrThread::GetCurrentThread()
+	{
+		return tlsContext::Get()->m_CurrentScriptThread;
+	}
+
 	scrThread* scrThread::GetThread(std::uint32_t hash)
 	{
 		static bool init = [] {

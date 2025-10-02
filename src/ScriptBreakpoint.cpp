@@ -1,30 +1,38 @@
 #include "ScriptBreakpoint.hpp"
 #include "rage/scrThread.hpp"
 
-bool ScriptBreakpoint::OnBreakpoint(std::uint32_t script, std::uint32_t pc, rage::scrThreadContext* context)
+void ScriptBreakpoint::OnBreakpoint(std::uint32_t script, std::uint32_t pc, rage::scrThreadContext* context)
 {
-    if (!context)
-        return false;
-
-    if (Exists(script, pc) && !IsActive(script, pc))
+    for (auto& bp : m_Breakpoints)
     {
-        Increment(script, pc);
-        if (ShouldPause(script, pc))
+        if (bp.Script == script && bp.Pc == pc)
         {
-            context->m_ProgramCounter = pc;
-            Activate(script, pc);
+            if (bp.Skip)
+            {
+                bp.Skip = false; // skip this hit once so we don't end up bouncing
+                return;
+            }
 
-            char message[256];
-            std::snprintf(message, sizeof(message), "Breakpoint hit, paused script 0x%X at 0x%X!", script, pc);
-            MessageBoxA(0, message, "ScriptVM", MB_OK);
-            return true;
+            if (!bp.Active)
+            {
+                context->m_ProgramCounter = pc;
+                context->m_State = rage::scrThreadState::PAUSED;
+
+                bp.HitCount++;
+                bp.Active = true;
+
+                if (auto thread = rage::scrThread::GetCurrentThread())
+                {
+                    char message[128];
+                    std::snprintf(message, sizeof(message), "Breakpoint hit, paused %s at 0x%X!", thread->m_ScriptName, thread->m_Context.m_ProgramCounter);
+                    MessageBoxA(0, message, "ScriptVM", MB_OK | MB_TOPMOST);
+                }
+            }
         }
     }
-
-    return false;
 }
 
-bool ScriptBreakpoint::Add(std::uint32_t script, std::uint32_t pc, bool pause)
+bool ScriptBreakpoint::Add(std::uint32_t script, std::uint32_t pc)
 {
     for (auto& bp : m_Breakpoints)
     {
@@ -32,7 +40,7 @@ bool ScriptBreakpoint::Add(std::uint32_t script, std::uint32_t pc, bool pause)
             return false;
     }
 
-    m_Breakpoints.push_back({ script, pc, 0, false, pause });
+    m_Breakpoints.push_back({ script, pc, 0, false, false });
     return true;
 }
 
@@ -41,6 +49,30 @@ bool ScriptBreakpoint::Remove(std::uint32_t script, std::uint32_t pc)
     auto oldSize = m_Breakpoints.size();
     auto it = std::remove_if(m_Breakpoints.begin(), m_Breakpoints.end(), [script, pc](const Breakpoint& bp) {
         return bp.Script == script && bp.Pc == pc && !bp.Active;
+    });
+
+    m_Breakpoints.erase(it, m_Breakpoints.end());
+    return m_Breakpoints.size() < oldSize;
+}
+
+bool ScriptBreakpoint::RemoveAll()
+{
+    auto oldSize = m_Breakpoints.size();
+
+    auto it = std::remove_if(m_Breakpoints.begin(), m_Breakpoints.end(), [](const Breakpoint& bp) {
+        return !bp.Active;
+    });
+
+    m_Breakpoints.erase(it, m_Breakpoints.end());
+    return m_Breakpoints.size() < oldSize;
+}
+
+bool ScriptBreakpoint::RemoveAllScript(std::uint32_t script)
+{
+    auto oldSize = m_Breakpoints.size();
+
+    auto it = std::remove_if(m_Breakpoints.begin(), m_Breakpoints.end(), [script](const Breakpoint& bp) {
+        return bp.Script == script && !bp.Active;
     });
 
     m_Breakpoints.erase(it, m_Breakpoints.end());
@@ -56,6 +88,9 @@ bool ScriptBreakpoint::Resume(std::uint32_t script, std::uint32_t pc)
             if (auto thread = rage::scrThread::GetThread(script))
             {
                 thread->m_Context.m_State = rage::scrThreadState::RUNNING;
+
+                bp.Active = false;
+                bp.Skip = true;
                 return true;
             }
         }
@@ -75,6 +110,29 @@ bool ScriptBreakpoint::Exists(std::uint32_t script, std::uint32_t pc)
     return false;
 }
 
+bool ScriptBreakpoint::IsActive(std::uint32_t script, std::uint32_t pc)
+{
+    for (auto& bp : m_Breakpoints)
+    {
+        if (bp.Script == script && bp.Pc == pc)
+            return bp.Active;
+    }
+
+    return false;
+}
+
+int ScriptBreakpoint::GetCount()
+{
+    return static_cast<int>(m_Breakpoints.size());
+}
+
+int ScriptBreakpoint::GetCountScript(std::uint32_t script)
+{
+    return static_cast<int>(std::count_if(m_Breakpoints.begin(), m_Breakpoints.end(), [script](const Breakpoint& bp) {
+        return bp.Script == script;
+    }));
+}
+
 int ScriptBreakpoint::GetHitCount(std::uint32_t script, std::uint32_t pc)
 {
     for (auto& bp : m_Breakpoints)
@@ -84,84 +142,4 @@ int ScriptBreakpoint::GetHitCount(std::uint32_t script, std::uint32_t pc)
     }
 
     return 0;
-}
-
-void ScriptBreakpoint::Activate(std::uint32_t script, std::uint32_t pc)
-{
-    for (auto& bp : m_Breakpoints)
-    {
-        if (bp.Script == script && bp.Pc == pc)
-        {
-            bp.Active = true;
-            break;
-        }
-    }
-}
-
-void ScriptBreakpoint::Increment(std::uint32_t script, std::uint32_t pc)
-{
-    for (auto& bp : m_Breakpoints)
-    {
-        if (bp.Script == script && bp.Pc == pc)
-        {
-            ++bp.HitCount;
-            break;
-        }
-    }
-}
-
-bool ScriptBreakpoint::IsActive(std::uint32_t script, std::uint32_t pc)
-{
-    for (auto& bp : m_Breakpoints)
-    {
-        if (bp.Script == script && bp.Pc == pc)
-        {
-            bool active = bp.Active;
-            bp.Active = false;
-            return active;
-        }
-    }
-
-    return false;
-}
-
-bool ScriptBreakpoint::ShouldPause(std::uint32_t script, std::uint32_t pc)
-{
-    for (auto& bp : m_Breakpoints)
-    {
-        if (bp.Script == script && bp.Pc == pc)
-            return bp.Pause;
-    }
-
-    return false;
-}
-
-// Exports
-
-extern "C"
-{
-    __declspec(dllexport) bool ScriptBreakpointAdd(std::uint32_t script, std::uint32_t pc, bool pause)
-    {
-        return ScriptBreakpoint::Add(script, pc, pause);
-    }
-
-    __declspec(dllexport) bool ScriptBreakpointRemove(std::uint32_t script, std::uint32_t pc)
-    {
-        return ScriptBreakpoint::Remove(script, pc);
-    }
-
-    __declspec(dllexport) bool ScriptBreakpointResume(std::uint32_t script, std::uint32_t pc)
-    {
-        return ScriptBreakpoint::Resume(script, pc);
-    }
-
-    __declspec(dllexport) bool ScriptBreakpointExists(std::uint32_t script, std::uint32_t pc)
-    {
-        return ScriptBreakpoint::Exists(script, pc);
-    }
-
-    __declspec(dllexport) int ScriptBreakpointGetHitCount(std::uint32_t script, std::uint32_t pc)
-    {
-        return ScriptBreakpoint::GetHitCount(script, pc);
-    }
 }

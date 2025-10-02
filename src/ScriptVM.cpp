@@ -5,7 +5,6 @@
 #include "rage/scrProgram.hpp"
 #include "rage/scrNativeCallContext.hpp"
 #include "rage/Opcode.hpp"
-#include "rage/tlsContext.hpp"
 
 #define GET_BYTE (*++opcode)
 #define GET_WORD ((opcode += 2), *reinterpret_cast<std::uint16_t*>(opcode - 1))
@@ -13,17 +12,25 @@
 #define GET_24BIT ((opcode += 3), *reinterpret_cast<std::uint32_t*>(opcode - 3) >> 8)
 #define GET_DWORD ((opcode += 4), *reinterpret_cast<std::uint32_t*>(opcode - 3))
 
-#define SCRIPT_FAILURE(str)                                                                   \
-    do                                                                                        \
-    {                                                                                         \
-        if (auto thread = rage::tlsContext::Get()->m_CurrentScriptThread)                     \
-        {                                                                                     \
-            thread->m_Context.m_ProgramCounter = static_cast<std::int32_t>(opcode - basePtr); \
-        }                                                                                     \
-                                                                                              \
-        MessageBoxA(nullptr, str, "ScriptVM", MB_OK | MB_ICONERROR);                          \
-                                                                                              \
-        return context->m_State = rage::scrThreadState::KILLED;                               \
+#define SCRIPT_FAILURE(str)                                                                    \
+    do                                                                                         \
+    {                                                                                          \
+        if (auto thread = rage::scrThread::GetCurrentThread())                                 \
+        {                                                                                      \
+            thread->m_Context.m_ProgramCounter = static_cast<std::uint32_t>(opcode - basePtr); \
+                                                                                               \
+            char message[128];                                                                 \
+            std::snprintf(message, sizeof(message),                                            \
+                "Exception in %s at 0x%X! Reason: %s",                                         \
+                thread->m_ScriptName,                                                          \
+                thread->m_Context.m_ProgramCounter,                                            \
+                str);                                                                          \
+                                                                                               \
+            std::strncpy(thread->m_ErrorMessage, str, sizeof(thread->m_ErrorMessage));         \
+            MessageBoxA(nullptr, message, "ScriptVM", MB_OK | MB_ICONERROR);                   \
+        }                                                                                      \
+                                                                                               \
+        return context->m_State = rage::scrThreadState::KILLED;                                \
     } while (0)
 
 #define JUMP(_offset)                                              \
@@ -121,8 +128,9 @@ NEXT:
 
     const auto script = static_cast<std::uint32_t>(context->m_ScriptHash);
     const auto pc = static_cast<std::uint32_t>(opcode - basePtr);
-    if (ScriptBreakpoint::OnBreakpoint(script, pc, context))
-        return context->m_State = rage::scrThreadState::PAUSED;
+    ScriptBreakpoint::OnBreakpoint(script, pc, context);
+    if (context->m_State == rage::scrThreadState::PAUSED)
+        return context->m_State;
 
     switch (GET_BYTE)
     {
