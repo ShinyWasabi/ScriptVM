@@ -128,7 +128,7 @@ NEXT:
 
     const auto script = static_cast<std::uint32_t>(context->m_ScriptHash);
     const auto pc = static_cast<std::uint32_t>(opcode - basePtr);
-    ScriptBreakpoint::OnBreakpoint(script, pc, context);
+    ScriptBreakpoint::OnHit(script, pc);
     if (context->m_State == rage::scrThreadState::PAUSED)
         return context->m_State;
 
