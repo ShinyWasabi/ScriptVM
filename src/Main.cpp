@@ -18,7 +18,6 @@ DWORD Main(PVOID)
 		return EXIT_FAILURE;
 
 	PipeServer::Run();
-
 	return EXIT_SUCCESS;
 }
 

@@ -1,54 +1,77 @@
 #include "ScriptBreakpoint.hpp"
+#include "Memory.hpp"
 #include "rage/scrThread.hpp"
 
-void ScriptBreakpoint::OnHit(std::uint32_t script, std::uint32_t pc)
+// TO-DO: Consider making this optional.
+void PauseGame(bool pause)
 {
-    // Remove any breakpoints whose scripts no longer exist
-    m_Breakpoints.erase(std::remove_if(m_Breakpoints.begin(), m_Breakpoints.end(), [](const Breakpoint& bp) {
-        return !rage::scrThread::GetThread(bp.Script);
-    }), m_Breakpoints.end());
+    static void(*PauseGameNow)() = nullptr;
+    static void(*UnpauseGameNow)() = nullptr;
+    static void(*TogglePausedRenderPhases)(bool, int) = nullptr;
+    static std::uint8_t* PauseGameNowPatch = nullptr;
 
-    if (auto thread = rage::scrThread::GetThread(script))
+    static bool Init = [] {
+        if (auto addr = Memory::ScanPattern("56 48 83 EC 20 80 3D ? ? ? ? ? 75 ? 48 8D 0D"))
+            PauseGameNow = addr->As<decltype(PauseGameNow)>();
+
+        if (auto addr = Memory::ScanPattern("56 57 53 48 83 EC 20 48 8D 0D ? ? ? ? E8 ? ? ? ? 48 8D 0D"))
+            UnpauseGameNow = addr->As<decltype(UnpauseGameNow)>();
+
+        if (auto addr = Memory::ScanPattern("80 3D ? ? ? ? ? 74 ? 48 83 3D ? ? ? ? ? 74 ? 89 D0"))
+            TogglePausedRenderPhases = addr->As<decltype(TogglePausedRenderPhases)>();
+
+        if (auto addr = Memory::ScanPattern("80 88 ? ? ? ? ? EB ? E8"))
+            PauseGameNowPatch = addr->Sub(0x1E).As<std::uint8_t*>();
+
+        return true;
+    }();
+
+    if (!PauseGameNow || !UnpauseGameNow || !TogglePausedRenderPhases || !PauseGameNowPatch)
+        return;
+
+    if (pause)
     {
-        // Remove any breakpoints whose thread ID doesn't match this instance of its script
-        m_Breakpoints.erase(std::remove_if(m_Breakpoints.begin(), m_Breakpoints.end(), [thread, script](const Breakpoint& bp) {
-            return bp.Script == script && bp.Id != thread->m_Context.m_ThreadId;
-        }), m_Breakpoints.end());
-
-        for (auto& bp : m_Breakpoints)
-        {
-            if (bp.Script != script || bp.Pc != pc)
-                continue;
-
-            if (m_SkipThisHit)
-            {
-                m_SkipThisHit = false;
-                return;
-            }
-
-            m_ActiveBreakpoint = &bp;
-
-            thread->m_Context.m_ProgramCounter = pc;
-            thread->m_Context.m_State = rage::scrThreadState::PAUSED;
-
-            std::string callstack;
-            callstack += "Call stack:\n";
-            for (uint8_t i = 0; i < thread->m_Context.m_CallDepth && i < 16; i++)
-            {
-                char entry[32];
-                std::snprintf(entry, sizeof(entry), "  [%u] 0x%X\n", i, thread->m_Context.m_CallStack[i]);
-                callstack += entry;
-            }
-
-            if (thread->m_Context.m_CallDepth == 0)
-                callstack += "  (empty)\n";
-
-            char message[512];
-            std::snprintf(message, sizeof(message), "Breakpoint hit, paused %s at 0x%X!\n\n%s", thread->m_ScriptName, thread->m_Context.m_ProgramCounter, callstack.c_str());
-            MessageBoxA(0, message, "ScriptVM", MB_OK);
-            return;
-        }
+        *PauseGameNowPatch = 0xEB;
+        PauseGameNow();
     }
+    else
+    {
+        UnpauseGameNow();
+        TogglePausedRenderPhases(true, 0);
+        *PauseGameNowPatch = 0x74;
+    }
+}
+
+bool ScriptBreakpoint::Process()
+{
+    auto thread = rage::scrThread::GetCurrentThread();
+    if (!thread)
+        return false;
+
+    for (auto& bp : m_Breakpoints)
+    {
+        if (thread->m_ScriptHash != bp.Script || thread->m_Context.m_ProgramCounter != bp.Pc)
+            continue;
+
+        if (m_SkipThisHit)
+        {
+            m_SkipThisHit = false;
+            return false;
+        }
+
+        // Show the message first so scrDbg doesn't attempt to resume when MessageBoxA is active
+        char message[128];
+        std::snprintf(message, sizeof(message), "Breakpoint hit, paused %s at 0x%X!", thread->m_ScriptName, thread->m_Context.m_ProgramCounter);
+        MessageBoxA(0, message, "ScriptVM", MB_OK);
+
+        m_ActiveBreakpoint = &bp;
+        thread->m_Context.m_State = rage::scrThreadState::PAUSED;
+
+        PauseGame(true);
+        return true; // Return here to signal the VM that a BP is active, no need to check for others as there can only be one active at a time.
+    }
+
+    return false;
 }
 
 bool ScriptBreakpoint::Add(std::uint32_t script, std::uint32_t pc)
@@ -56,18 +79,13 @@ bool ScriptBreakpoint::Add(std::uint32_t script, std::uint32_t pc)
     if (Exists(script, pc))
         return false;
 
-    if (auto thread = rage::scrThread::GetThread(script))
-    {
-        m_Breakpoints.push_back({ script, pc, thread->m_Context.m_ThreadId });
-        return true;
-    }
-
-    return false;
+    m_Breakpoints.push_back({ script, pc });
+    return true;
 }
 
 bool ScriptBreakpoint::Remove(std::uint32_t script, std::uint32_t pc)
 {
-    for (auto it = m_Breakpoints.begin(); it != m_Breakpoints.end(); ++it)
+    for (auto it = m_Breakpoints.begin(); it != m_Breakpoints.end(); it++)
     {
         if (it->Script == script && it->Pc == pc)
         {
@@ -78,6 +96,7 @@ bool ScriptBreakpoint::Remove(std::uint32_t script, std::uint32_t pc)
                     m_ActiveBreakpoint = nullptr;
                     thread->m_Context.m_State = rage::scrThreadState::RUNNING;
                 }
+                PauseGame(false);
             }
 
             m_Breakpoints.erase(it);
@@ -97,7 +116,7 @@ bool ScriptBreakpoint::Exists(std::uint32_t script, std::uint32_t pc)
 
 bool ScriptBreakpoint::Active()
 {
-    return m_ActiveBreakpoint;
+    return m_ActiveBreakpoint != nullptr;
 }
 
 bool ScriptBreakpoint::Resume()
@@ -111,6 +130,8 @@ bool ScriptBreakpoint::Resume()
         m_SkipThisHit = true;
 
         thread->m_Context.m_State = rage::scrThreadState::RUNNING;
+
+        PauseGame(false);
         return true;
     }
 

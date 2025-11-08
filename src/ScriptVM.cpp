@@ -125,12 +125,14 @@ rage::scrThreadState RunScriptThread(rage::scrValue* stack, rage::scrValue** glo
     JUMP(context->m_ProgramCounter);
 
 NEXT:
+    // Update these per opcode
+    context->m_ProgramCounter = static_cast<std::uint32_t>(opcode - basePtr);
+    context->m_StackPointer = static_cast<std::int32_t>(stackPtr - stack + 1);
+    context->m_FramePointer = static_cast<std::int32_t>(framePtr - stack);
 
-    const auto script = static_cast<std::uint32_t>(context->m_ScriptHash);
-    const auto pc = static_cast<std::uint32_t>(opcode - basePtr);
-    ScriptBreakpoint::OnHit(script, pc);
-    if (context->m_State == rage::scrThreadState::PAUSED)
-        return context->m_State;
+    // Process breakpoints
+    if (ScriptBreakpoint::Process())
+        return context->m_State; // If we do not return here, the VM will end up executing opcodes until the next NATIVE call.
 
     switch (GET_BYTE)
     {

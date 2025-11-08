@@ -6,7 +6,6 @@ class ScriptBreakpoint
 	{
 		std::uint32_t Script;
 		std::uint32_t Pc;
-		std::uint32_t Id;
 	};
 
 	static inline bool m_SkipThisHit;
@@ -14,7 +13,7 @@ class ScriptBreakpoint
 	static inline std::vector<Breakpoint> m_Breakpoints;
 
 public:
-	static void OnHit(std::uint32_t script, std::uint32_t pc);
+	static bool Process();
 
 	static bool Add(std::uint32_t script, std::uint32_t pc);
 	static bool Remove(std::uint32_t script, std::uint32_t pc);

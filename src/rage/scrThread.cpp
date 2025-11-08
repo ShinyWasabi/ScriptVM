@@ -12,7 +12,9 @@ namespace rage
 	scrThread* scrThread::GetThread(std::uint32_t hash)
 	{
 		static bool init = [] {
-			m_Threads = Memory::ScanPattern("48 8B 05 ? ? ? ? 48 89 34 F8 48 FF C7 48 39 FB 75 97")->Add(3).Rip().As<atArray<scrThread*>*>();
+			if (auto addr = Memory::ScanPattern("48 8B 05 ? ? ? ? 48 89 34 F8 48 FF C7 48 39 FB 75 97"))
+				m_Threads = addr->Add(3).Rip().As<atArray<scrThread*>*>();
+
 			return true;
 		}();
 
