@@ -4,27 +4,20 @@ enum class ePipeCommands : std::uint8_t
 {
     BREAKPOINT_SET,
     BREAKPOINT_EXISTS,
-    BREAKPOINT_ACTIVE,
     BREAKPOINT_RESUME,
+    BREAKPOINT_PAUSE_GAME,
+    BREAKPOINT_GET_ACTIVE,
     BREAKPOINT_GET_ALL,
     BREAKPOINT_REMOVE_ALL
 };
 
-struct PipeCommandSetBreakpoint
+struct PipeBreakpoint
 {
     std::uint32_t Script;
     std::uint32_t Pc;
+};
+
+struct PipeBreakpointSet : PipeBreakpoint
+{
     bool Set;
-};
-
-struct PipeCommandBreakpointExists
-{
-    std::uint32_t Script;
-    std::uint32_t Pc;
-};
-
-struct PipeCommandBreakpointGetAll
-{
-    std::uint32_t Script;
-    std::uint32_t Pc;
 };

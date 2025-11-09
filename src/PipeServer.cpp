@@ -54,12 +54,8 @@ void PipeServer::RunImpl()
             {
             case ePipeCommands::BREAKPOINT_SET:
             {
-                PipeCommandSetBreakpoint args{};
-                if (!Receive(&args, sizeof(args)))
-                {
-                    disconnected = true;
-                    break;
-                }
+                PipeBreakpointSet args{};
+                Receive(&args, sizeof(args));
 
                 if (args.Set)
                     ScriptBreakpoint::Add(args.Script, args.Pc);
@@ -69,20 +65,10 @@ void PipeServer::RunImpl()
             }
             case ePipeCommands::BREAKPOINT_EXISTS:
             {
-                PipeCommandBreakpointExists args{};
-                if (!Receive(&args, sizeof(args)))
-                {
-                    disconnected = true;
-                    break;
-                }
+                PipeBreakpoint args{};
+                Receive(&args, sizeof(args));
 
-                uint8_t result = ScriptBreakpoint::Exists(args.Script, args.Pc) ? 1 : 0;
-                Send(&result, sizeof(result));
-                break;
-            }
-            case ePipeCommands::BREAKPOINT_ACTIVE:
-            {
-                uint8_t result = ScriptBreakpoint::Active() ? 1 : 0;
+                bool result = ScriptBreakpoint::Exists(args.Script, args.Pc);
                 Send(&result, sizeof(result));
                 break;
             }
@@ -91,19 +77,40 @@ void PipeServer::RunImpl()
                 ScriptBreakpoint::Resume();
                 break;
             }
+            case ePipeCommands::BREAKPOINT_PAUSE_GAME:
+            {
+                bool pause = false;
+                Receive(&pause, sizeof(pause));
+
+                ScriptBreakpoint::SetPauseGame(pause);
+                break;
+            }
+            case ePipeCommands::BREAKPOINT_GET_ACTIVE:
+            {
+                auto active = ScriptBreakpoint::GetActive();
+
+                bool hasActive = active.has_value();
+                Send(&hasActive, sizeof(hasActive));
+
+                if (active)
+                {
+                    PipeBreakpoint entry{ active->Script, active->Pc };
+                    Send(&entry, sizeof(entry));
+                }
+                break;
+            }
             case ePipeCommands::BREAKPOINT_GET_ALL:
             {
-                const auto bps = ScriptBreakpoint::GetAll();
+                auto bps = ScriptBreakpoint::GetAll();
 
                 uint32_t count = static_cast<uint32_t>(bps.size());
                 Send(&count, sizeof(count));
 
                 for (const auto& bp : bps)
                 {
-                    PipeCommandBreakpointGetAll entry{ bp.Script, bp.Pc };
+                    PipeBreakpoint entry{ bp.Script, bp.Pc };
                     Send(&entry, sizeof(entry));
                 }
-
                 break;
             }
             case ePipeCommands::BREAKPOINT_REMOVE_ALL:
