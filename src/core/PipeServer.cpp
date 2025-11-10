@@ -1,16 +1,6 @@
 #include "PipeServer.hpp"
 #include "PipeCommands.hpp"
-#include "ScriptBreakpoint.hpp"
-
-PipeServer::PipeServer() :
-    m_PipeHandle(INVALID_HANDLE_VALUE)
-{
-}
-
-PipeServer::~PipeServer()
-{
-    DestroyImpl();
-}
+#include "debug/ScriptBreakpoint.hpp"
 
 bool PipeServer::InitImpl(const std::string& name)
 {
@@ -94,7 +84,7 @@ void PipeServer::RunImpl()
 
                 if (active)
                 {
-                    PipeBreakpoint entry{ active->Script, active->Pc };
+                    PipeBreakpoint entry{active->first, active->second};
                     Send(&entry, sizeof(entry));
                 }
                 break;
@@ -108,7 +98,7 @@ void PipeServer::RunImpl()
 
                 for (const auto& bp : bps)
                 {
-                    PipeBreakpoint entry{ bp.Script, bp.Pc };
+                    PipeBreakpoint entry{bp.first, bp.second};
                     Send(&entry, sizeof(entry));
                 }
                 break;

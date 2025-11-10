@@ -25,15 +25,13 @@ private:
         return instance;
     }
 
-    PipeServer();
-    ~PipeServer();
-
     bool InitImpl(const std::string& name);
     void DestroyImpl();
     void RunImpl();
+
     bool Wait();
     bool Send(const void* data, size_t size);
     bool Receive(void* data, size_t size);
 
-    HANDLE m_PipeHandle;
+    HANDLE m_PipeHandle = INVALID_HANDLE_VALUE;
 };

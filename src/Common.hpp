@@ -1,9 +1,12 @@
 #pragma once
 #include <Windows.h>
-#include <optional>
+#include <algorithm>
 #include <cstddef>
+#include <filesystem>
 #include <memory>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
-#include <algorithm>
-#include <string>
+
+extern bool g_IsEnhanced;
